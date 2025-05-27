@@ -1,4 +1,7 @@
-// Restaurant Billing and Management System
+// changes by kushal
+
+// Restaurant Billing and Management System with Feedback Feature
+// Features: Menu display, Order taking, Billing, Customer data, File Handling, Admin reports, Table Booking, Customer Feedback
 
 #include <iostream>
 #include <fstream>
@@ -6,6 +9,7 @@
 #include <iomanip>
 #include <string>
 #include <ctime>
+#include <map>
 using namespace std;
 
 // Menu Item Class
@@ -37,10 +41,11 @@ class Order {
 public:
     int orderId;
     string customerName;
+    int tableNumber;
     vector<OrderItem> items;
     time_t orderTime;
 
-    Order(int id, string name) : orderId(id), customerName(name) {
+    Order(int id, string name, int tableNo) : orderId(id), customerName(name), tableNumber(tableNo) {
         orderTime = time(0);
     }
 
@@ -57,7 +62,7 @@ public:
 
     void printBill() {
         cout << "\n-------- BILL --------\n";
-        cout << "Order ID: " << orderId << "\nCustomer: " << customerName << endl;
+        cout << "Order ID: " << orderId << "\nCustomer: " << customerName << "\nTable: " << tableNumber << endl;
         cout << "Date/Time: " << ctime(&orderTime);
         cout << "----------------------\n";
         for (auto& item : items) {
@@ -71,7 +76,7 @@ public:
 
     void saveToFile() {
         ofstream file("orders.txt", ios::app);
-        file << orderId << "|" << customerName << "|" << ctime(&orderTime);
+        file << orderId << "|" << customerName << "|" << tableNumber << "|" << ctime(&orderTime);
         for (auto& item : items)
             file << item.item.id << "," << item.item.name << "," << item.quantity << "," << item.getTotal() << ";";
         file << "\n";
@@ -84,11 +89,13 @@ class Restaurant {
 private:
     vector<MenuItem> menu;
     int nextOrderId;
+    map<int, bool> tableStatus;
 
 public:
     Restaurant() {
         nextOrderId = 1000;
         loadMenu();
+        for (int i = 1; i <= 10; i++) tableStatus[i] = false; // 10 tables, all free
     }
 
     void loadMenu() {
@@ -99,6 +106,11 @@ public:
         menu.push_back(MenuItem(5, "Fried Rice", 80.0));
         menu.push_back(MenuItem(6, "Ice Cream", 50.0));
         menu.push_back(MenuItem(7, "Coffee", 25.0));
+        menu.push_back(MenuItem(8, "Pizza", 150.0));
+        menu.push_back(MenuItem(9, "Burger", 120.0));
+        menu.push_back(MenuItem(10, "Noodles", 90.0));
+        menu.push_back(MenuItem(11, "Gobi Manchurian", 100.0));
+        menu.push_back(MenuItem(12, "Lassi", 40.0));
     }
 
     void showMenu() {
@@ -110,13 +122,61 @@ public:
         cout << "------------------\n";
     }
 
+    void showAvailableTables() {
+        cout << "\nAvailable Tables: ";
+        for (auto& pair : tableStatus) {
+            if (!pair.second)
+                cout << pair.first << " ";
+        }
+        cout << endl;
+    }
+
+    bool bookTable(int tableNo) {
+        if (tableStatus.count(tableNo) && !tableStatus[tableNo]) {
+            tableStatus[tableNo] = true;
+            return true;
+        }
+        return false;
+    }
+
+    void freeTable(int tableNo) {
+        if (tableStatus.count(tableNo))
+            tableStatus[tableNo] = false;
+    }
+
+    void collectFeedback(const string& customerName) {
+        string feedback;
+        cout << "\nWould you like to leave feedback? (y/n): ";
+        char response;
+        cin >> response;
+        cin.ignore();
+        if (response == 'y' || response == 'Y') {
+            cout << "Enter your feedback: ";
+            getline(cin, feedback);
+            ofstream file("feedback.txt", ios::app);
+            file << "Customer: " << customerName << "\nFeedback: " << feedback << "\n-----------------------------\n";
+            file.close();
+            cout << "Thank you for your feedback!\n";
+        }
+    }
+
     void takeOrder() {
         string customer;
+        int tableNo;
         cout << "Enter customer name: ";
         cin.ignore();
         getline(cin, customer);
 
-        Order order(nextOrderId++, customer);
+        showAvailableTables();
+        cout << "Choose a table number: ";
+        cin >> tableNo;
+
+        if (!bookTable(tableNo)) {
+            cout << "Table not available or invalid!\n";
+            return;
+        }
+
+        Order order(nextOrderId++, customer, tableNo);
         int choice, qty;
         char more;
 
@@ -143,7 +203,10 @@ public:
 
         order.printBill();
         order.saveToFile();
+        freeTable(tableNo);
         cout << "Order placed successfully!\n";
+
+        collectFeedback(customer);
     }
 
     void showOrderHistory() {
@@ -156,15 +219,26 @@ public:
         file.close();
     }
 
+    void showFeedback() {
+        ifstream file("feedback.txt");
+        string line;
+        cout << "\n---- Customer Feedback ----\n";
+        while (getline(file, line)) {
+            cout << line << endl;
+        }
+        file.close();
+    }
+
     void run() {
         int choice;
         do {
-            cout << "\n==== RESTAURANT SYSTEM ====";
-            cout << "\n1. Show Menu";
-            cout << "\n2. Take Order";
-            cout << "\n3. Show Order History";
-            cout << "\n4. Exit";
-            cout << "\nChoose an option: ";
+            cout << "\n==== RESTAURANT SYSTEM ====\n";
+            cout << "1. Show Menu\n";
+            cout << "2. Take Order\n";
+            cout << "3. Show Order History\n";
+            cout << "4. Show Feedback\n";
+            cout << "5. Exit\n";
+            cout << "Choose an option: ";
             cin >> choice;
 
             switch (choice) {
@@ -178,12 +252,15 @@ public:
                     showOrderHistory();
                     break;
                 case 4:
+                    showFeedback();
+                    break;
+                case 5:
                     cout << "Exiting...\n";
                     break;
                 default:
                     cout << "Invalid choice!\n";
             }
-        } while (choice != 4);
+        } while (choice != 5);
     }
 };
 
