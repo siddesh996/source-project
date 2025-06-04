@@ -1,8 +1,3 @@
-// changes by kushal
-
-// Restaurant Billing and Management System with Feedback Feature
-// Features: Menu display, Order taking, Billing, Customer data, File Handling, Admin reports, Table Booking, Customer Feedback
-
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -10,6 +5,7 @@
 #include <string>
 #include <ctime>
 #include <map>
+#include <algorithm>
 using namespace std;
 
 // Menu Item Class
@@ -84,7 +80,7 @@ public:
     }
 };
 
-// Restaurant System Class
+// Restaurant Class
 class Restaurant {
 private:
     vector<MenuItem> menu;
@@ -95,22 +91,24 @@ public:
     Restaurant() {
         nextOrderId = 1000;
         loadMenu();
-        for (int i = 1; i <= 10; i++) tableStatus[i] = false; // 10 tables, all free
+        for (int i = 1; i <= 10; i++) tableStatus[i] = false;
     }
 
     void loadMenu() {
-        menu.push_back(MenuItem(1, "Masala Dosa", 40.0));
-        menu.push_back(MenuItem(2, "Idli Vada", 30.0));
-        menu.push_back(MenuItem(3, "Paneer Butter Masala", 90.0));
-        menu.push_back(MenuItem(4, "Chapati", 10.0));
-        menu.push_back(MenuItem(5, "Fried Rice", 80.0));
-        menu.push_back(MenuItem(6, "Ice Cream", 50.0));
-        menu.push_back(MenuItem(7, "Coffee", 25.0));
-        menu.push_back(MenuItem(8, "Pizza", 150.0));
-        menu.push_back(MenuItem(9, "Burger", 120.0));
-        menu.push_back(MenuItem(10, "Noodles", 90.0));
-        menu.push_back(MenuItem(11, "Gobi Manchurian", 100.0));
-        menu.push_back(MenuItem(12, "Lassi", 40.0));
+        menu = {
+            MenuItem(1, "Masala Dosa", 40.0),
+            MenuItem(2, "Idli Vada", 30.0),
+            MenuItem(3, "Paneer Butter Masala", 90.0),
+            MenuItem(4, "Chapati", 10.0),
+            MenuItem(5, "Fried Rice", 80.0),
+            MenuItem(6, "Ice Cream", 50.0),
+            MenuItem(7, "Coffee", 25.0),
+            MenuItem(8, "Pizza", 150.0),
+            MenuItem(9, "Burger", 120.0),
+            MenuItem(10, "Noodles", 90.0),
+            MenuItem(11, "Gobi Manchurian", 100.0),
+            MenuItem(12, "Lassi", 40.0)
+        };
     }
 
     void showMenu() {
@@ -120,6 +118,68 @@ public:
                  << "Rs. " << fixed << setprecision(2) << item.price << endl;
         }
         cout << "------------------\n";
+    }
+
+    void searchMenuItem() {
+        string keyword;
+        cout << "Enter item name to search: ";
+        cin.ignore();
+        getline(cin, keyword);
+
+        transform(keyword.begin(), keyword.end(), keyword.begin(), ::tolower);
+        bool found = false;
+        for (auto& item : menu) {
+            string nameLower = item.name;
+            transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
+            if (nameLower.find(keyword) != string::npos) {
+                cout << item.id << ". " << item.name << " - Rs. " << item.price << endl;
+                found = true;
+            }
+        }
+        if (!found) cout << "No items matched your search.\n";
+    }
+
+    void editMenu() {
+        int option;
+        cout << "\n--- Menu Edit ---\n1. Add Item\n2. Edit Item Price\n3. Delete Item\nChoose: ";
+        cin >> option;
+
+        if (option == 1) {
+            int id = menu.size() + 1;
+            string name;
+            double price;
+            cout << "Enter item name: ";
+            cin.ignore();
+            getline(cin, name);
+            cout << "Enter item price: ";
+            cin >> price;
+            menu.push_back(MenuItem(id, name, price));
+            cout << "Item added!\n";
+        } else if (option == 2) {
+            int id;
+            double newPrice;
+            cout << "Enter item ID to edit: ";
+            cin >> id;
+            for (auto& item : menu) {
+                if (item.id == id) {
+                    cout << "Current price of " << item.name << ": Rs. " << item.price << endl;
+                    cout << "Enter new price: ";
+                    cin >> newPrice;
+                    item.price = newPrice;
+                    cout << "Price updated!\n";
+                    return;
+                }
+            }
+            cout << "Item ID not found!\n";
+        } else if (option == 3) {
+            int id;
+            cout << "Enter item ID to delete: ";
+            cin >> id;
+            menu.erase(remove_if(menu.begin(), menu.end(), [id](MenuItem& i) { return i.id == id; }), menu.end());
+            cout << "Item deleted!\n";
+        } else {
+            cout << "Invalid choice!\n";
+        }
     }
 
     void showAvailableTables() {
@@ -154,7 +214,8 @@ public:
             cout << "Enter your feedback: ";
             getline(cin, feedback);
             ofstream file("feedback.txt", ios::app);
-            file << "Customer: " << customerName << "\nFeedback: " << feedback << "\n-----------------------------\n";
+            time_t now = time(0);
+            file << "Customer: " << customerName << "\nFeedback: " << feedback << "\nDate/Time: " << ctime(&now) << "-----------------------------\n";
             file.close();
             cout << "Thank you for your feedback!\n";
         }
@@ -229,6 +290,33 @@ public:
         file.close();
     }
 
+    void clearFeedback() {
+        ofstream file("feedback.txt");
+        file.close();
+        cout << "Feedback cleared!\n";
+    }
+
+    void printSummaryReport() {
+        ifstream file("orders.txt");
+        string line;
+        int totalOrders = 0;
+        double totalRevenue = 0;
+        while (getline(file, line)) {
+            size_t pos = line.find_last_of(';');
+            while (pos != string::npos) {
+                size_t pricePos = line.find_last_of(',', pos - 1);
+                if (pricePos != string::npos) {
+                    double price = stod(line.substr(pricePos + 1, pos - pricePos - 1));
+                    totalRevenue += price;
+                }
+                pos = line.find_last_of(';', pos - 1);
+            }
+            totalOrders++;
+        }
+        cout << "\n--- Summary Report ---\nTotal Orders: " << totalOrders << "\nTotal Revenue: Rs. " << totalRevenue << "\n----------------------\n";
+        file.close();
+    }
+
     void run() {
         int choice;
         do {
@@ -237,30 +325,27 @@ public:
             cout << "2. Take Order\n";
             cout << "3. Show Order History\n";
             cout << "4. Show Feedback\n";
-            cout << "5. Exit\n";
+            cout << "5. Edit Menu\n";
+            cout << "6. Search Menu Item\n";
+            cout << "7. Summary Report\n";
+            cout << "8. Clear Feedback\n";
+            cout << "9. Exit\n";
             cout << "Choose an option: ";
             cin >> choice;
 
             switch (choice) {
-                case 1:
-                    showMenu();
-                    break;
-                case 2:
-                    takeOrder();
-                    break;
-                case 3:
-                    showOrderHistory();
-                    break;
-                case 4:
-                    showFeedback();
-                    break;
-                case 5:
-                    cout << "Exiting...\n";
-                    break;
-                default:
-                    cout << "Invalid choice!\n";
+                case 1: showMenu(); break;
+                case 2: takeOrder(); break;
+                case 3: showOrderHistory(); break;
+                case 4: showFeedback(); break;
+                case 5: editMenu(); break;
+                case 6: searchMenuItem(); break;
+                case 7: printSummaryReport(); break;
+                case 8: clearFeedback(); break;
+                case 9: cout << "Exiting...\n"; break;
+                default: cout << "Invalid choice!\n";
             }
-        } while (choice != 5);
+        } while (choice != 9);
     }
 };
 
@@ -269,3 +354,4 @@ int main() {
     r.run();
     return 0;
 }
+
