@@ -1,3 +1,4 @@
+// RestaurantSystem.cpp
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -6,20 +7,23 @@
 #include <ctime>
 #include <map>
 #include <algorithm>
+#include <limits>
 using namespace std;
 
-// Menu Item Class
+// MenuItem Class
 class MenuItem {
 public:
     int id;
     string name;
     double price;
+    bool available;
 
     MenuItem() {}
-    MenuItem(int i, string n, double p) : id(i), name(n), price(p) {}
+    MenuItem(int i, string n, double p, bool a = true)
+        : id(i), name(n), price(p), available(a) {}
 };
 
-// Order Item Class
+// OrderItem Class
 class OrderItem {
 public:
     MenuItem item;
@@ -41,7 +45,8 @@ public:
     vector<OrderItem> items;
     time_t orderTime;
 
-    Order(int id, string name, int tableNo) : orderId(id), customerName(name), tableNumber(tableNo) {
+    Order(int id, string name, int tableNo)
+        : orderId(id), customerName(name), tableNumber(tableNo) {
         orderTime = time(0);
     }
 
@@ -49,32 +54,46 @@ public:
         items.push_back(item);
     }
 
-    double getTotalBill() {
+    double getSubTotal() {
         double total = 0;
-        for (auto& item : items)
-            total += item.getTotal();
+        for (auto& item : items) total += item.getTotal();
         return total;
+    }
+
+    double getGST() {
+        return getSubTotal() * 0.05; // 5% GST
+    }
+
+    double getServiceCharge() {
+        return getSubTotal() * 0.03; // 3% Service charge
+    }
+
+    double getTotalBill() {
+        return getSubTotal() + getGST() + getServiceCharge();
     }
 
     void printBill() {
         cout << "\n-------- BILL --------\n";
-        cout << "Order ID: " << orderId << "\nCustomer: " << customerName << "\nTable: " << tableNumber << endl;
-        cout << "Date/Time: " << ctime(&orderTime);
+        cout << "Order ID: " << orderId << "\nCustomer: " << customerName
+             << "\nTable: " << tableNumber << "\nDate/Time: " << ctime(&orderTime);
         cout << "----------------------\n";
         for (auto& item : items) {
             cout << left << setw(20) << item.item.name
                  << " x" << item.quantity
                  << " = Rs. " << fixed << setprecision(2) << item.getTotal() << endl;
         }
-        cout << "----------------------\nTotal: Rs. " << fixed << setprecision(2) << getTotalBill() << endl;
-        cout << "----------------------\n";
+        cout << "Subtotal: Rs. " << getSubTotal() << "\n";
+        cout << "GST (5%): Rs. " << getGST() << "\n";
+        cout << "Service (3%): Rs. " << getServiceCharge() << "\n";
+        cout << "----------------------\nTotal: Rs. " << getTotalBill() << "\n----------------------\n";
     }
 
     void saveToFile() {
         ofstream file("orders.txt", ios::app);
         file << orderId << "|" << customerName << "|" << tableNumber << "|" << ctime(&orderTime);
-        for (auto& item : items)
+        for (auto& item : items) {
             file << item.item.id << "," << item.item.name << "," << item.quantity << "," << item.getTotal() << ";";
+        }
         file << "\n";
         file.close();
     }
@@ -86,6 +105,7 @@ private:
     vector<MenuItem> menu;
     int nextOrderId;
     map<int, bool> tableStatus;
+    const string adminPassword = "admin123";
 
 public:
     Restaurant() {
@@ -96,26 +116,27 @@ public:
 
     void loadMenu() {
         menu = {
-            MenuItem(1, "Masala Dosa", 40.0),
-            MenuItem(2, "Idli Vada", 30.0),
-            MenuItem(3, "Paneer Butter Masala", 90.0),
-            MenuItem(4, "Chapati", 10.0),
-            MenuItem(5, "Fried Rice", 80.0),
-            MenuItem(6, "Ice Cream", 50.0),
-            MenuItem(7, "Coffee", 25.0),
-            MenuItem(8, "Pizza", 150.0),
-            MenuItem(9, "Burger", 120.0),
-            MenuItem(10, "Noodles", 90.0),
-            MenuItem(11, "Gobi Manchurian", 100.0),
-            MenuItem(12, "Lassi", 40.0)
+            MenuItem(1, "Masala Dosa", 40),
+            MenuItem(2, "Idli Vada", 30),
+            MenuItem(3, "Paneer Butter Masala", 90),
+            MenuItem(4, "Chapati", 10),
+            MenuItem(5, "Fried Rice", 80),
+            MenuItem(6, "Ice Cream", 50),
+            MenuItem(7, "Coffee", 25),
+            MenuItem(8, "Pizza", 150),
+            MenuItem(9, "Burger", 120),
+            MenuItem(10, "Noodles", 90),
+            MenuItem(11, "Gobi Manchurian", 100),
+            MenuItem(12, "Lassi", 40)
         };
     }
 
     void showMenu() {
         cout << "\n------ MENU ------\n";
         for (auto& item : menu) {
-            cout << item.id << ". " << left << setw(25) << item.name
-                 << "Rs. " << fixed << setprecision(2) << item.price << endl;
+            if (item.available)
+                cout << item.id << ". " << left << setw(25) << item.name
+                     << "Rs. " << fixed << setprecision(2) << item.price << endl;
         }
         cout << "------------------\n";
     }
@@ -125,23 +146,26 @@ public:
         cout << "Enter item name to search: ";
         cin.ignore();
         getline(cin, keyword);
-
         transform(keyword.begin(), keyword.end(), keyword.begin(), ::tolower);
         bool found = false;
+
         for (auto& item : menu) {
-            string nameLower = item.name;
-            transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
-            if (nameLower.find(keyword) != string::npos) {
-                cout << item.id << ". " << item.name << " - Rs. " << item.price << endl;
+            string lower = item.name;
+            transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+            if (lower.find(keyword) != string::npos) {
+                cout << item.id << ". " << item.name << " - Rs. " << item.price << (item.available ? "" : " [Unavailable]") << endl;
                 found = true;
             }
         }
-        if (!found) cout << "No items matched your search.\n";
+
+        if (!found) cout << "No matching item found.\n";
     }
 
     void editMenu() {
+        if (!authenticateAdmin()) return;
+
         int option;
-        cout << "\n--- Menu Edit ---\n1. Add Item\n2. Edit Item Price\n3. Delete Item\nChoose: ";
+        cout << "\n--- Menu Edit ---\n1. Add Item\n2. Edit Item Price\n3. Delete Item\n4. Toggle Availability\nChoose: ";
         cin >> option;
 
         if (option == 1) {
@@ -155,28 +179,28 @@ public:
             cin >> price;
             menu.push_back(MenuItem(id, name, price));
             cout << "Item added!\n";
-        } else if (option == 2) {
+        } else if (option >= 2 && option <= 4) {
             int id;
-            double newPrice;
-            cout << "Enter item ID to edit: ";
+            cout << "Enter item ID: ";
             cin >> id;
+
             for (auto& item : menu) {
                 if (item.id == id) {
-                    cout << "Current price of " << item.name << ": Rs. " << item.price << endl;
-                    cout << "Enter new price: ";
-                    cin >> newPrice;
-                    item.price = newPrice;
-                    cout << "Price updated!\n";
+                    if (option == 2) {
+                        cout << "Enter new price: ";
+                        cin >> item.price;
+                        cout << "Price updated!\n";
+                    } else if (option == 3) {
+                        item.available = false;
+                        cout << "Item marked unavailable!\n";
+                    } else if (option == 4) {
+                        item.available = !item.available;
+                        cout << "Availability toggled!\n";
+                    }
                     return;
                 }
             }
             cout << "Item ID not found!\n";
-        } else if (option == 3) {
-            int id;
-            cout << "Enter item ID to delete: ";
-            cin >> id;
-            menu.erase(remove_if(menu.begin(), menu.end(), [id](MenuItem& i) { return i.id == id; }), menu.end());
-            cout << "Item deleted!\n";
         } else {
             cout << "Invalid choice!\n";
         }
@@ -184,10 +208,8 @@ public:
 
     void showAvailableTables() {
         cout << "\nAvailable Tables: ";
-        for (auto& pair : tableStatus) {
-            if (!pair.second)
-                cout << pair.first << " ";
-        }
+        for (auto& pair : tableStatus)
+            if (!pair.second) cout << pair.first << " ";
         cout << endl;
     }
 
@@ -200,63 +222,57 @@ public:
     }
 
     void freeTable(int tableNo) {
-        if (tableStatus.count(tableNo))
-            tableStatus[tableNo] = false;
+        if (tableStatus.count(tableNo)) tableStatus[tableNo] = false;
     }
 
-    void collectFeedback(const string& customerName) {
-        string feedback;
-        cout << "\nWould you like to leave feedback? (y/n): ";
-        char response;
-        cin >> response;
+    void collectFeedback(const string& name) {
+        char res;
+        cout << "\nLeave feedback? (y/n): ";
+        cin >> res;
         cin.ignore();
-        if (response == 'y' || response == 'Y') {
-            cout << "Enter your feedback: ";
-            getline(cin, feedback);
-            ofstream file("feedback.txt", ios::app);
+        if (res == 'y' || res == 'Y') {
+            string fb;
+            cout << "Enter feedback: ";
+            getline(cin, fb);
+            ofstream f("feedback.txt", ios::app);
             time_t now = time(0);
-            file << "Customer: " << customerName << "\nFeedback: " << feedback << "\nDate/Time: " << ctime(&now) << "-----------------------------\n";
-            file.close();
-            cout << "Thank you for your feedback!\n";
+            f << "Customer: " << name << "\nFeedback: " << fb << "\nTime: " << ctime(&now) << "------------------\n";
+            cout << "Thank you!\n";
         }
     }
 
     void takeOrder() {
-        string customer;
-        int tableNo;
-        cout << "Enter customer name: ";
+        string name;
+        int table;
+        cout << "Customer name: ";
         cin.ignore();
-        getline(cin, customer);
-
+        getline(cin, name);
         showAvailableTables();
-        cout << "Choose a table number: ";
-        cin >> tableNo;
+        cout << "Choose table: ";
+        cin >> table;
 
-        if (!bookTable(tableNo)) {
-            cout << "Table not available or invalid!\n";
+        if (!bookTable(table)) {
+            cout << "Table not available!\n";
             return;
         }
 
-        Order order(nextOrderId++, customer, tableNo);
-        int choice, qty;
+        Order order(nextOrderId++, name, table);
         char more;
+        int id, qty;
 
         do {
             showMenu();
             cout << "Enter item ID: ";
-            cin >> choice;
+            cin >> id;
             cout << "Enter quantity: ";
             cin >> qty;
 
-            bool found = false;
-            for (auto& item : menu) {
-                if (item.id == choice) {
-                    order.addItem(OrderItem(item, qty));
-                    found = true;
-                    break;
-                }
+            auto it = find_if(menu.begin(), menu.end(), [id](MenuItem& m) { return m.id == id && m.available; });
+            if (it != menu.end()) {
+                order.addItem(OrderItem(*it, qty));
+            } else {
+                cout << "Invalid item or unavailable.\n";
             }
-            if (!found) cout << "Invalid item ID!\n";
 
             cout << "Add more items? (y/n): ";
             cin >> more;
@@ -264,73 +280,75 @@ public:
 
         order.printBill();
         order.saveToFile();
-        freeTable(tableNo);
-        cout << "Order placed successfully!\n";
-
-        collectFeedback(customer);
+        freeTable(table);
+        cout << "Order completed.\n";
+        collectFeedback(name);
     }
 
     void showOrderHistory() {
         ifstream file("orders.txt");
+        if (!file) {
+            cout << "No order history found.\n";
+            return;
+        }
         string line;
-        cout << "\n---- Order History ----\n";
+        cout << "\n--- Order History ---\n";
         while (getline(file, line)) {
             cout << line << endl;
         }
-        file.close();
     }
 
     void showFeedback() {
         ifstream file("feedback.txt");
         string line;
-        cout << "\n---- Customer Feedback ----\n";
-        while (getline(file, line)) {
-            cout << line << endl;
-        }
-        file.close();
+        cout << "\n--- Customer Feedback ---\n";
+        while (getline(file, line)) cout << line << endl;
     }
 
     void clearFeedback() {
+        if (!authenticateAdmin()) return;
         ofstream file("feedback.txt");
         file.close();
-        cout << "Feedback cleared!\n";
+        cout << "Feedback cleared.\n";
     }
 
     void printSummaryReport() {
         ifstream file("orders.txt");
         string line;
-        int totalOrders = 0;
-        double totalRevenue = 0;
+        int orders = 0;
+        double total = 0;
+
         while (getline(file, line)) {
-            size_t pos = line.find_last_of(';');
-            while (pos != string::npos) {
-                size_t pricePos = line.find_last_of(',', pos - 1);
-                if (pricePos != string::npos) {
-                    double price = stod(line.substr(pricePos + 1, pos - pricePos - 1));
-                    totalRevenue += price;
+            size_t pos = 0;
+            while ((pos = line.find(";")) != string::npos) {
+                size_t start = line.rfind(",", pos - 1);
+                if (start != string::npos) {
+                    try {
+                        double val = stod(line.substr(start + 1, pos - start - 1));
+                        total += val;
+                    } catch (...) {}
                 }
-                pos = line.find_last_of(';', pos - 1);
+                line.erase(0, pos + 1);
             }
-            totalOrders++;
+            orders++;
         }
-        cout << "\n--- Summary Report ---\nTotal Orders: " << totalOrders << "\nTotal Revenue: Rs. " << totalRevenue << "\n----------------------\n";
-        file.close();
+
+        cout << "\n--- Summary Report ---\nTotal Orders: " << orders << "\nTotal Revenue: Rs. " << total << "\n----------------------\n";
+    }
+
+    bool authenticateAdmin() {
+        string pass;
+        cout << "Enter admin password: ";
+        cin >> pass;
+        return pass == adminPassword;
     }
 
     void run() {
         int choice;
         do {
             cout << "\n==== RESTAURANT SYSTEM ====\n";
-            cout << "1. Show Menu\n";
-            cout << "2. Take Order\n";
-            cout << "3. Show Order History\n";
-            cout << "4. Show Feedback\n";
-            cout << "5. Edit Menu\n";
-            cout << "6. Search Menu Item\n";
-            cout << "7. Summary Report\n";
-            cout << "8. Clear Feedback\n";
-            cout << "9. Exit\n";
-            cout << "Choose an option: ";
+            cout << "1. Show Menu\n2. Take Order\n3. Order History\n4. Show Feedback\n5. Edit Menu\n";
+            cout << "6. Search Item\n7. Summary Report\n8. Clear Feedback\n9. Exit\nChoose: ";
             cin >> choice;
 
             switch (choice) {
@@ -342,13 +360,14 @@ public:
                 case 6: searchMenuItem(); break;
                 case 7: printSummaryReport(); break;
                 case 8: clearFeedback(); break;
-                case 9: cout << "Exiting...\n"; break;
-                default: cout << "Invalid choice!\n";
+                case 9: cout << "Goodbye!\n"; break;
+                default: cout << "Invalid option.\n";
             }
         } while (choice != 9);
     }
 };
 
+// Main Function
 int main() {
     Restaurant r;
     r.run();
